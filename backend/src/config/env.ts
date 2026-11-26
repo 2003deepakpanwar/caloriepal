@@ -15,7 +15,7 @@ export const env = {
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   geminiModel: process.env.GEMINI_MODEL ?? 'gemini-flash-latest',
 
-  aiDailyLimit: Number(process.env.AI_DAILY_LIMIT ?? 10),
+  aiDailyLimit: Number(process.env.AI_DAILY_LIMIT ?? 20),
 
   usdaApiKey: process.env.USDA_API_KEY ?? '',
 
