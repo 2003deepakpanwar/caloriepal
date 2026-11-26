@@ -18,4 +18,10 @@ export const env = {
   aiDailyLimit: Number(process.env.AI_DAILY_LIMIT ?? 10),
 
   usdaApiKey: process.env.USDA_API_KEY ?? '',
+
+  cronSecret: process.env.CRON_SECRET ?? '',
+  enableInProcessCron:
+    (process.env.ENABLE_IN_PROCESS_CRON ?? 'true').toLowerCase() === 'true',
+  dinnerCronSchedule: process.env.DINNER_CRON_SCHEDULE ?? '0 18 * * *',
+  dinnerCronTimezone: process.env.DINNER_CRON_TIMEZONE ?? 'Asia/Kolkata',
 };

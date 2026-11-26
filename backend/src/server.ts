@@ -6,7 +6,9 @@ import { authRouter } from './routes/authRoutes.js';
 import { profileRouter } from './routes/profileRoutes.js';
 import { foodRouter } from './routes/foodRoutes.js';
 import { calorieRouter } from './routes/calorieRoutes.js';
+import { dinnerRouter } from './routes/dinnerRoutes.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
+import { startDinnerScheduler } from './jobs/dinnerScheduler.js';
 
 const app = express();
 
@@ -21,11 +23,13 @@ app.use('/api/auth', authRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/food', foodRouter);
 app.use('/api/calories', calorieRouter);
+app.use('/api/dinner', dinnerRouter);
 
 app.use(errorHandler);
 
 async function start(): Promise<void> {
   await connectDb();
+  startDinnerScheduler();
   app.listen(env.port, () => {
     console.log(`[server] listening on http://localhost:${env.port}`);
   });
