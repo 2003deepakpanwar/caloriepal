@@ -164,7 +164,13 @@ export async function lookupCalories(
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     if (q.length < 2) throw new HttpError(400, 'Query must be at least 2 characters');
     if (q.length > 100) throw new HttpError(400, 'Query too long');
-    const result = await lookupFoodCalories(q);
+    const quantityRaw = typeof req.query.quantity === 'string' ? Number(req.query.quantity) : NaN;
+    const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : undefined;
+    const unit =
+      typeof req.query.unit === 'string' && req.query.unit.trim().length > 0
+        ? req.query.unit.trim()
+        : undefined;
+    const result = await lookupFoodCalories(q, quantity, unit);
     res.json(result);
   } catch (err) {
     next(err);

@@ -82,7 +82,8 @@ export default function FoodTrackerPage() {
   }
 
   async function onLookup(i: number) {
-    const name = items[i]?.foodName?.trim();
+    const current = items[i];
+    const name = current?.foodName?.trim();
     if (!name || name.length < 2) {
       setError('Enter a food name first');
       return;
@@ -90,13 +91,18 @@ export default function FoodTrackerPage() {
     setError(null);
     setLookingUp(i);
     try {
-      const r = await api.get<LookupResult>(
-        `/api/food/lookup?q=${encodeURIComponent(name)}`,
-      );
+      const params = new URLSearchParams({ q: name });
+      if (current.quantity && current.quantity > 0) {
+        params.set('quantity', String(current.quantity));
+      }
+      if (current.unit && current.unit.trim().length > 0) {
+        params.set('unit', current.unit);
+      }
+      const r = await api.get<LookupResult>(`/api/food/lookup?${params}`);
+      // Only overwrite calories + macros (and clean up the name).
+      // Keep the user's quantity + unit intact so they stay in control.
       updateItem(i, {
         foodName: r.foodName,
-        quantity: r.quantity,
-        unit: r.unit,
         calories: r.calories,
         protein: r.protein,
         carbs: r.carbs,

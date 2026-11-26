@@ -40,21 +40,28 @@ const aiResponseSchema = z.object({
 
 export type AiFoodItem = z.infer<typeof aiItemSchema>;
 
-const LOOKUP_PROMPT = (name: string) => `Estimate calories and macros for one standard serving of this food:
+const LOOKUP_PROMPT = (name: string, quantity?: number, unit?: string) => {
+  const hasPortion = quantity != null && quantity > 0 && unit && unit.trim().length > 0;
+  const portionLine = hasPortion
+    ? `Portion the user actually has: ${quantity} ${unit}. Return calories and macros for EXACTLY that amount, keeping quantity=${quantity} and unit="${unit}".`
+    : `Use one typical standard serving.`;
+  return `Estimate calories and macros for this food.
 
 Food: "${name}"
+${portionLine}
 
 Return a JSON object with:
 - foodName (canonical name)
-- quantity (typical serving as a number)
-- unit (one of "pieces", "grams", "ml", "bowls", "cups", "slices", "serving")
+- quantity (number — the serving size you computed for)
+- unit (string — matching the serving unit)
 - calories (kcal for that serving)
 - protein, carbs, fats (grams for that serving)
 
 For Indian home-cooked foods (roti, dal, idli, poha, paneer, etc.) use standard homemade portions
-(e.g. 1 chapati ~ 100 kcal, 1 bowl dal ~ 150 kcal, 2 idlis ~ 80 kcal).
+(e.g. 1 chapati ~ 100 kcal, 1 bowl dal ~ 150 kcal, 2 idlis ~ 80 kcal). Scale linearly with quantity.
 
 Return valid JSON only, no commentary.`;
+};
 
 const lookupSchema = z.object({
   foodName: z.string().min(1),
@@ -144,7 +151,11 @@ export async function analyzeFoodImage(
   return parsed.items;
 }
 
-export async function lookupFoodCalories(name: string): Promise<LookupResult> {
+export async function lookupFoodCalories(
+  name: string,
+  quantity?: number,
+  unit?: string,
+): Promise<LookupResult> {
   if (!isAiEnabled()) {
     throw new HttpError(503, 'AI is not configured (AI_API_KEY missing)');
   }
@@ -154,7 +165,7 @@ export async function lookupFoodCalories(name: string): Promise<LookupResult> {
     openai.chat.completions.create({
       model: env.aiTextModel,
       response_format: { type: 'json_object' },
-      messages: [{ role: 'user', content: LOOKUP_PROMPT(name) }],
+      messages: [{ role: 'user', content: LOOKUP_PROMPT(name, quantity, unit) }],
     }),
   );
 
