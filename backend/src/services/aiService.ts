@@ -57,7 +57,7 @@ export async function analyzeFoodImage(
     httpOptions: { apiVersion: 'v1beta' },
   });
 
-  const response = await client.models.generateContent({
+  const request = {
     model: env.geminiModel,
     contents: [
       {
@@ -94,7 +94,30 @@ export async function analyzeFoodImage(
         required: ['items'],
       },
     },
-  });
+  };
+
+  // Free-tier Gemini commonly returns 503/429 during peaks — retry twice with backoff.
+  const response = await (async () => {
+    const delays = [0, 800, 2000];
+    let lastErr: unknown;
+    for (const delay of delays) {
+      if (delay) await new Promise((r) => setTimeout(r, delay));
+      try {
+        return await client.models.generateContent(request);
+      } catch (err) {
+        lastErr = err;
+        const status = (err as { status?: number }).status;
+        if (status !== 503 && status !== 429) throw err;
+      }
+    }
+    const status = (lastErr as { status?: number }).status ?? 502;
+    throw new HttpError(
+      status === 503 ? 503 : 429,
+      status === 503
+        ? 'AI vision is temporarily overloaded. Please try again in a moment.'
+        : 'AI vision rate limit hit. Please wait a minute before retrying.',
+    );
+  })();
 
   const text = response.text;
   if (!text) throw new HttpError(502, 'Empty response from AI vision model');
