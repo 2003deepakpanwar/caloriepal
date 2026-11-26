@@ -236,8 +236,9 @@ export default function FoodTrackerPage() {
                     type="number"
                     step="any"
                     className="input mt-1"
-                    value={it.quantity}
+                    value={it.quantity || ''}
                     onChange={(e) => updateItem(i, { quantity: Number(e.target.value) })}
+                    onFocus={(e) => e.target.select()}
                     required
                   />
                 </label>
@@ -257,8 +258,9 @@ export default function FoodTrackerPage() {
                     type="number"
                     step="any"
                     className="input mt-1"
-                    value={it.calories}
+                    value={it.calories || ''}
                     onChange={(e) => updateItem(i, { calories: Number(e.target.value) })}
+                    onFocus={(e) => e.target.select()}
                     required
                   />
                 </label>
@@ -307,8 +309,9 @@ function MacroField({
         type="number"
         step="any"
         className="input mt-1"
-        value={value ?? ''}
+        value={value || ''}
         onChange={(e) => onChange(Number(e.target.value))}
+        onFocus={(e) => e.target.select()}
       />
     </label>
   );
