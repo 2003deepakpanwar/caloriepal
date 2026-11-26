@@ -4,6 +4,7 @@ import { env } from './config/env.js';
 import { connectDb } from './config/db.js';
 import { authRouter } from './routes/authRoutes.js';
 import { profileRouter } from './routes/profileRoutes.js';
+import { foodRouter } from './routes/foodRoutes.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 
 const app = express();
@@ -17,6 +18,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/profile', profileRouter);
+app.use('/api/food', foodRouter);
 
 app.use(errorHandler);
 
