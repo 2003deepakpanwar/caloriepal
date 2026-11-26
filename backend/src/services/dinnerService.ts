@@ -101,7 +101,14 @@ export async function generateForUser(
     userId: new Types.ObjectId(userId),
     date,
   });
-  if (existing && !options.force) return existing;
+  if (existing && !options.force) {
+    const cachedPrefs = existing.preferences ?? {};
+    const samePrefs =
+      (cachedPrefs.vegetarianOnly ?? false) === (preferences.vegetarianOnly ?? false) &&
+      (cachedPrefs.highProteinOnly ?? false) === (preferences.highProteinOnly ?? false);
+    if (samePrefs) return existing;
+    // Preferences changed since last generation — fall through and regenerate.
+  }
 
   const breakdown = await getDailyBreakdown(userId, date);
   const consumedBeforeDinner = breakdown.totalCalories - breakdown.byMeal.dinner;
