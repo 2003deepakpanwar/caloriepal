@@ -127,3 +127,22 @@ export interface DinnerRecommendation {
   preferences: { vegetarianOnly?: boolean; highProteinOnly?: boolean };
   generatedAt: string;
 }
+
+export interface CustomDinnerSuggestion {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  rationale: string;
+}
+
+export interface CustomDinnerResponse {
+  date: string;
+  calorieTarget: number;
+  consumedBeforeDinner: number;
+  remainingCalories: number;
+  message: string;
+  suggestions: CustomDinnerSuggestion[];
+  request: string;
+}

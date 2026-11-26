@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../lib/api';
-import type { DinnerRecommendation } from '../../../lib/types';
+import type { CustomDinnerResponse, DinnerRecommendation } from '../../../lib/types';
+
+const EXAMPLE_PROMPTS = [
+  'Something light with paneer, no onion',
+  'High-protein and under 400 kcal',
+  'Simple one-bowl meal with rice',
+  'South Indian, under 500 kcal',
+];
 
 export default function DinnerPlannerPage() {
   const [rec, setRec] = useState<DinnerRecommendation | null>(null);
@@ -10,6 +17,11 @@ export default function DinnerPlannerPage() {
   const [error, setError] = useState<string | null>(null);
   const [vegOnly, setVegOnly] = useState(false);
   const [highProteinOnly, setHighProteinOnly] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customInput, setCustomInput] = useState('');
+  const [customLoading, setCustomLoading] = useState(false);
+  const [customResult, setCustomResult] = useState<CustomDinnerResponse | null>(null);
+  const [customError, setCustomError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,6 +57,39 @@ export default function DinnerPlannerPage() {
     }
   }
 
+  async function submitCustom() {
+    const request = customInput.trim();
+    if (request.length < 2) {
+      setCustomError('Describe what you want');
+      return;
+    }
+    setCustomLoading(true);
+    setCustomError(null);
+    try {
+      const body = {
+        request,
+        preferences: { vegetarianOnly: vegOnly, highProteinOnly },
+      };
+      const r = await api.post<CustomDinnerResponse>('/api/dinner/custom', body);
+      setCustomResult(r);
+    } catch (err) {
+      setCustomError(err instanceof Error ? err.message : 'Failed to generate');
+    } finally {
+      setCustomLoading(false);
+    }
+  }
+
+  function openCustom() {
+    setCustomResult(null);
+    setCustomError(null);
+    setCustomInput('');
+    setCustomOpen(true);
+  }
+
+  function closeCustom() {
+    setCustomOpen(false);
+  }
+
   return (
     <div className="space-y-6">
       <header>
@@ -68,9 +113,14 @@ export default function DinnerPlannerPage() {
             />
             High-protein only
           </label>
-          <button onClick={regenerate} className="btn-ghost ml-auto">
-            Regenerate
-          </button>
+          <div className="ml-auto flex gap-2">
+            <button onClick={openCustom} className="btn-ghost">
+              Custom…
+            </button>
+            <button onClick={regenerate} className="btn-ghost">
+              Regenerate
+            </button>
+          </div>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -127,6 +177,103 @@ export default function DinnerPlannerPage() {
           </>
         )}
       </section>
+
+      {customOpen && (
+        <div
+          className="fixed inset-0 z-20 flex items-end justify-center bg-black/40 p-4 md:items-center"
+          onClick={closeCustom}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Custom dinner</h2>
+                <p className="text-sm text-neutral-500">
+                  Describe what you feel like — we'll match it to your remaining budget.
+                </p>
+              </div>
+              <button
+                onClick={closeCustom}
+                className="text-sm text-neutral-400 hover:text-neutral-700"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <textarea
+                className="input min-h-[90px] resize-y"
+                placeholder="e.g. something light with paneer, no onion"
+                value={customInput}
+                onChange={(e) => setCustomInput(e.target.value)}
+                maxLength={500}
+              />
+              <div className="flex flex-wrap gap-2 text-xs">
+                {EXAMPLE_PROMPTS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setCustomInput(p)}
+                    className="rounded-full bg-neutral-100 px-3 py-1 text-neutral-600 hover:bg-neutral-200"
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <button onClick={closeCustom} className="btn-ghost">
+                  Cancel
+                </button>
+                <button
+                  onClick={submitCustom}
+                  disabled={customLoading}
+                  className="btn-primary"
+                >
+                  {customLoading ? 'Thinking…' : 'Generate'}
+                </button>
+              </div>
+            </div>
+
+            {customError && <p className="mt-3 text-sm text-red-600">{customError}</p>}
+
+            {customResult && !customLoading && (
+              <div className="mt-5 space-y-3">
+                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  {customResult.message}
+                </p>
+                {customResult.suggestions.map((s, i) => {
+                  const diff = customResult.remainingCalories - s.calories;
+                  return (
+                    <div key={i} className="rounded-lg border border-neutral-200 p-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="text-sm font-medium">{s.name}</div>
+                          <div className="text-xs text-neutral-500">
+                            {s.calories} kcal · P {s.protein}g · C {s.carbs}g · F {s.fats}g
+                          </div>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                            diff >= 0
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-amber-50 text-amber-700'
+                          }`}
+                        >
+                          {diff >= 0 ? `${diff} kcal to spare` : `${Math.abs(diff)} over`}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-neutral-600">{s.rationale}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

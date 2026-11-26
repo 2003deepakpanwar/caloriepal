@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { env } from '../config/env.js';
 import { HttpError } from '../middleware/errorMiddleware.js';
 import {
+  customDinner,
   generateForAllActiveUsers,
   generateForUser,
   getRecommendation,
@@ -49,6 +50,26 @@ export async function generateHandler(
     const date = typeof req.body?.date === 'string' ? req.body.date : undefined;
     const rec = await generateForUser(userId, { date, preferences, force: true });
     res.json(rec);
+  } catch (err) {
+    next(err);
+  }
+}
+
+const customBodySchema = z.object({
+  request: z.string().min(2).max(500),
+  preferences: preferencesSchema,
+});
+
+export async function customHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.userId as string;
+    const body = customBodySchema.parse(req.body);
+    const result = await customDinner(userId, body.request, body.preferences);
+    res.json(result);
   } catch (err) {
     next(err);
   }

@@ -152,6 +152,70 @@ export async function analyzeFoodImage(
   return parsed.items;
 }
 
+const CUSTOM_DINNER_PROMPT = (opts: {
+  remaining: number;
+  request: string;
+  vegetarianOnly: boolean;
+  highProteinOnly: boolean;
+}) => `Suggest 3 dinner options for a user.
+
+Remaining calorie budget for dinner: ${opts.remaining} kcal
+${opts.vegetarianOnly ? 'Must be vegetarian.' : ''}
+${opts.highProteinOnly ? 'Prefer high-protein options (>=25g protein).' : ''}
+User request: "${opts.request}"
+
+For each option, prefer meals fitting within the budget. Indian home-cooked meals welcome.
+
+Return a JSON object with:
+- message: one short line summarising the plan (plain text)
+- suggestions: array of 3 objects, each with:
+  - name (short meal name)
+  - calories (kcal, number)
+  - protein (g, number)
+  - carbs (g, number)
+  - fats (g, number)
+  - rationale (one short line, mentions how it fits the request)
+
+Return valid JSON only, no commentary.`;
+
+const customSchema = z.object({
+  message: z.string(),
+  suggestions: z.array(
+    z.object({
+      name: z.string(),
+      calories: z.number().min(0),
+      protein: z.number().min(0),
+      carbs: z.number().min(0),
+      fats: z.number().min(0),
+      rationale: z.string(),
+    }),
+  ),
+});
+
+export type CustomDinnerResult = z.infer<typeof customSchema>;
+
+export async function suggestCustomDinner(opts: {
+  remaining: number;
+  request: string;
+  vegetarianOnly: boolean;
+  highProteinOnly: boolean;
+}): Promise<CustomDinnerResult> {
+  if (!isAiEnabled()) {
+    throw new HttpError(503, 'AI is not configured (AI_API_KEY missing)');
+  }
+  const openai = client();
+  const response = await withRetry(() =>
+    openai.chat.completions.create({
+      model: env.aiTextModel,
+      response_format: { type: 'json_object' },
+      temperature: 0,
+      messages: [{ role: 'user', content: CUSTOM_DINNER_PROMPT(opts) }],
+    }),
+  );
+  const text = response.choices[0]?.message?.content ?? null;
+  return parseJson(text, customSchema);
+}
+
 export async function lookupFoodCalories(
   name: string,
   quantity?: number,

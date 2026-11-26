@@ -5,6 +5,7 @@ import { User } from '../models/User.js';
 import { HttpError } from '../middleware/errorMiddleware.js';
 import { getDailyBreakdown } from './foodService.js';
 import { todayInTimezone } from '../utils/dates.js';
+import { suggestCustomDinner } from './aiService.js';
 
 export interface DinnerPreferences {
   vegetarianOnly?: boolean;
@@ -140,6 +141,58 @@ export async function getRecommendation(
   options: GenerateOptions = {},
 ): Promise<DinnerRecommendationDoc> {
   return generateForUser(userId, options);
+}
+
+export interface CustomDinnerResponse {
+  date: string;
+  calorieTarget: number;
+  consumedBeforeDinner: number;
+  remainingCalories: number;
+  message: string;
+  suggestions: Array<{
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fats: number;
+    rationale: string;
+  }>;
+  request: string;
+}
+
+export async function customDinner(
+  userId: string,
+  request: string,
+  preferences: DinnerPreferences = {},
+): Promise<CustomDinnerResponse> {
+  const user = await User.findById(userId);
+  if (!user) throw new HttpError(404, 'User not found');
+  if (!user.calorieGoals || !user.profile) {
+    throw new HttpError(400, 'Profile not configured — set daily calorie target first');
+  }
+
+  const timezone = user.timezone ?? 'Asia/Kolkata';
+  const date = todayInTimezone(timezone);
+  const breakdown = await getDailyBreakdown(userId, date);
+  const consumedBeforeDinner = breakdown.totalCalories - breakdown.byMeal.dinner;
+  const remaining = user.calorieGoals.dailyTarget - consumedBeforeDinner;
+
+  const ai = await suggestCustomDinner({
+    remaining,
+    request,
+    vegetarianOnly: preferences.vegetarianOnly ?? false,
+    highProteinOnly: preferences.highProteinOnly ?? false,
+  });
+
+  return {
+    date,
+    calorieTarget: user.calorieGoals.dailyTarget,
+    consumedBeforeDinner,
+    remainingCalories: remaining,
+    message: ai.message,
+    suggestions: ai.suggestions,
+    request,
+  };
 }
 
 export async function generateForAllActiveUsers(): Promise<{ generated: number }> {

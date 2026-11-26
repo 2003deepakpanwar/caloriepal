@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   cronHandler,
+  customHandler,
   generateHandler,
   getRecommendationHandler,
 } from '../controllers/dinnerController.js';
@@ -14,3 +15,4 @@ dinnerRouter.post('/cron', cronHandler);
 dinnerRouter.use(requireAuth);
 dinnerRouter.get('/recommendation', getRecommendationHandler);
 dinnerRouter.post('/generate', generateHandler);
+dinnerRouter.post('/custom', customHandler);
