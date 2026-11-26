@@ -134,6 +134,7 @@ export async function analyzeFoodImage(
     openai.chat.completions.create({
       model: env.aiVisionModel,
       response_format: { type: 'json_object' },
+      temperature: 0,
       messages: [
         {
           role: 'user',
@@ -165,6 +166,7 @@ export async function lookupFoodCalories(
     openai.chat.completions.create({
       model: env.aiTextModel,
       response_format: { type: 'json_object' },
+      temperature: 0,
       messages: [{ role: 'user', content: LOOKUP_PROMPT(name, quantity, unit) }],
     }),
   );
