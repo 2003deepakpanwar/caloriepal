@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import OpenAI from 'openai';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { HttpError } from '../middleware/errorMiddleware.js';
@@ -21,7 +21,7 @@ Guidance:
 - If a portion is hard to judge, keep the estimate but set confidence < 0.6.
 - Prefer "grams" or "pieces" over vague units like "serving".
 
-Return valid JSON only.`;
+Return a JSON object with a single key "items" containing an array of these objects. No commentary.`;
 
 const aiItemSchema = z.object({
   foodName: z.string().min(1),
@@ -42,14 +42,14 @@ export type AiFoodItem = z.infer<typeof aiItemSchema>;
 
 const LOOKUP_PROMPT = (name: string) => `Estimate calories and macros for one standard serving of this food:
 
-Food name: "${name}"
+Food: "${name}"
 
-Return JSON with:
-- foodName: canonical name
-- quantity: typical serving size as a number
-- unit: one of "pieces", "grams", "ml", "bowls", "cups", "slices", "serving"
-- calories: kcal for that serving
-- protein, carbs, fats: grams for that serving
+Return a JSON object with:
+- foodName (canonical name)
+- quantity (typical serving as a number)
+- unit (one of "pieces", "grams", "ml", "bowls", "cups", "slices", "serving")
+- calories (kcal for that serving)
+- protein, carbs, fats (grams for that serving)
 
 For Indian home-cooked foods (roti, dal, idli, poha, paneer, etc.) use standard homemade portions
 (e.g. 1 chapati ~ 100 kcal, 1 bowl dal ~ 150 kcal, 2 idlis ~ 80 kcal).
@@ -69,7 +69,48 @@ const lookupSchema = z.object({
 export type LookupResult = z.infer<typeof lookupSchema>;
 
 export function isAiEnabled(): boolean {
-  return env.geminiApiKey.length > 0;
+  return env.aiApiKey.length > 0;
+}
+
+function client(): OpenAI {
+  return new OpenAI({ apiKey: env.aiApiKey, baseURL: env.aiBaseUrl });
+}
+
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const delays = [0, 800, 2000];
+  let lastErr: unknown;
+  for (const delay of delays) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const status = (err as { status?: number }).status;
+      if (status !== 503 && status !== 429 && status !== 500 && status !== 502) throw err;
+    }
+  }
+  const status = (lastErr as { status?: number }).status ?? 502;
+  throw new HttpError(
+    status === 429 ? 429 : 503,
+    status === 429
+      ? 'AI rate limit hit. Please wait a moment and retry.'
+      : 'AI is temporarily unavailable. Please try again shortly.',
+  );
+}
+
+function parseJson<T>(text: string | null | undefined, schema: z.ZodType<T>): T {
+  if (!text) throw new HttpError(502, 'Empty response from AI');
+  // Some models wrap JSON in ```json fences; strip them defensively.
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new HttpError(502, 'AI returned invalid JSON');
+  }
+  const r = schema.safeParse(parsed);
+  if (!r.success) throw new HttpError(502, 'AI response did not match expected schema');
+  return r.data;
 }
 
 export async function analyzeFoodImage(
@@ -77,154 +118,46 @@ export async function analyzeFoodImage(
   mimeType: string,
 ): Promise<AiFoodItem[]> {
   if (!isAiEnabled()) {
-    throw new HttpError(503, 'AI vision is not configured (GEMINI_API_KEY missing)');
+    throw new HttpError(503, 'AI is not configured (AI_API_KEY missing)');
   }
+  const openai = client();
+  const dataUrl = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
 
-  const client = new GoogleGenAI({
-    apiKey: env.geminiApiKey,
-    httpOptions: { apiVersion: 'v1beta' },
-  });
-
-  const request = {
-    model: env.geminiModel,
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          { inlineData: { mimeType, data: imageBuffer.toString('base64') } },
-          { text: ANALYZE_PROMPT },
-        ],
-      },
-    ],
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          items: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                foodName: { type: Type.STRING },
-                quantity: { type: Type.NUMBER },
-                unit: { type: Type.STRING },
-                calories: { type: Type.NUMBER },
-                protein: { type: Type.NUMBER },
-                carbs: { type: Type.NUMBER },
-                fats: { type: Type.NUMBER },
-                confidence: { type: Type.NUMBER },
-              },
-              required: ['foodName', 'quantity', 'unit', 'calories', 'confidence'],
-            },
-          },
+  const response = await withRetry(() =>
+    openai.chat.completions.create({
+      model: env.aiVisionModel,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: ANALYZE_PROMPT },
+            { type: 'image_url', image_url: { url: dataUrl } },
+          ],
         },
-        required: ['items'],
-      },
-    },
-  };
+      ],
+    }),
+  );
 
-  // Free-tier Gemini commonly returns 503/429 during peaks — retry twice with backoff.
-  const response = await (async () => {
-    const delays = [0, 800, 2000];
-    let lastErr: unknown;
-    for (const delay of delays) {
-      if (delay) await new Promise((r) => setTimeout(r, delay));
-      try {
-        return await client.models.generateContent(request);
-      } catch (err) {
-        lastErr = err;
-        const status = (err as { status?: number }).status;
-        if (status !== 503 && status !== 429) throw err;
-      }
-    }
-    const status = (lastErr as { status?: number }).status ?? 502;
-    throw new HttpError(
-      status === 503 ? 503 : 429,
-      status === 503
-        ? 'AI vision is temporarily overloaded. Please try again in a moment.'
-        : 'AI vision rate limit hit. Please wait a minute before retrying.',
-    );
-  })();
-
-  const text = response.text;
-  if (!text) throw new HttpError(502, 'Empty response from AI vision model');
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new HttpError(502, 'AI vision model returned invalid JSON');
-  }
-
-  const result = aiResponseSchema.safeParse(parsed);
-  if (!result.success) {
-    throw new HttpError(502, 'AI vision response did not match expected schema');
-  }
-  return result.data.items;
+  const text = response.choices[0]?.message?.content ?? null;
+  const parsed = parseJson(text, aiResponseSchema);
+  return parsed.items;
 }
 
 export async function lookupFoodCalories(name: string): Promise<LookupResult> {
   if (!isAiEnabled()) {
-    throw new HttpError(503, 'AI vision is not configured (GEMINI_API_KEY missing)');
+    throw new HttpError(503, 'AI is not configured (AI_API_KEY missing)');
   }
+  const openai = client();
 
-  const client = new GoogleGenAI({
-    apiKey: env.geminiApiKey,
-    httpOptions: { apiVersion: 'v1beta' },
-  });
+  const response = await withRetry(() =>
+    openai.chat.completions.create({
+      model: env.aiTextModel,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: LOOKUP_PROMPT(name) }],
+    }),
+  );
 
-  const request = {
-    model: env.geminiModel,
-    contents: [{ role: 'user', parts: [{ text: LOOKUP_PROMPT(name) }] }],
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          foodName: { type: Type.STRING },
-          quantity: { type: Type.NUMBER },
-          unit: { type: Type.STRING },
-          calories: { type: Type.NUMBER },
-          protein: { type: Type.NUMBER },
-          carbs: { type: Type.NUMBER },
-          fats: { type: Type.NUMBER },
-        },
-        required: ['foodName', 'quantity', 'unit', 'calories', 'protein', 'carbs', 'fats'],
-      },
-    },
-  };
-
-  const response = await (async () => {
-    const delays = [0, 600, 1500];
-    let lastErr: unknown;
-    for (const delay of delays) {
-      if (delay) await new Promise((r) => setTimeout(r, delay));
-      try {
-        return await client.models.generateContent(request);
-      } catch (err) {
-        lastErr = err;
-        const status = (err as { status?: number }).status;
-        if (status !== 503 && status !== 429) throw err;
-      }
-    }
-    const status = (lastErr as { status?: number }).status ?? 502;
-    throw new HttpError(
-      status === 503 ? 503 : 429,
-      'Calorie lookup is temporarily unavailable. Please try again in a moment.',
-    );
-  })();
-
-  const text = response.text;
-  if (!text) throw new HttpError(502, 'Empty response from AI');
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new HttpError(502, 'AI returned invalid JSON');
-  }
-  const result = lookupSchema.safeParse(parsed);
-  if (!result.success) throw new HttpError(502, 'AI response did not match expected schema');
-  return result.data;
+  const text = response.choices[0]?.message?.content ?? null;
+  return parseJson(text, lookupSchema);
 }

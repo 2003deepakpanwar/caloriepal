@@ -12,8 +12,13 @@ export const env = {
   jwtSecret: required('JWT_SECRET'),
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
 
-  geminiApiKey: process.env.GEMINI_API_KEY ?? '',
-  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-flash-latest',
+  // AI provider — defaults to Groq (OpenAI-compatible, fast free tier).
+  // Set AI_API_KEY from Groq (or OpenAI, Together, OpenRouter, etc.).
+  // Old GEMINI_API_KEY is kept as a fallback for existing deploys.
+  aiApiKey: process.env.AI_API_KEY ?? process.env.GROQ_API_KEY ?? process.env.GEMINI_API_KEY ?? '',
+  aiBaseUrl: process.env.AI_BASE_URL ?? 'https://api.groq.com/openai/v1',
+  aiVisionModel: process.env.AI_VISION_MODEL ?? 'meta-llama/llama-4-scout-17b-16e-instruct',
+  aiTextModel: process.env.AI_TEXT_MODEL ?? 'llama-3.3-70b-versatile',
 
   aiDailyLimit: Number(process.env.AI_DAILY_LIMIT ?? 20),
 
