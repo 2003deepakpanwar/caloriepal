@@ -6,6 +6,7 @@ import { HttpError } from '../middleware/errorMiddleware.js';
 import { getDailyBreakdown } from './foodService.js';
 import { todayInTimezone } from '../utils/dates.js';
 import { suggestCustomDinner } from './aiService.js';
+import { sendDinnerEmail } from './emailService.js';
 
 export interface DinnerPreferences {
   vegetarianOnly?: boolean;
@@ -195,16 +196,45 @@ export async function customDinner(
   };
 }
 
-export async function generateForAllActiveUsers(): Promise<{ generated: number }> {
-  const users = await User.find({ calorieGoals: { $ne: null }, profile: { $ne: null } }).select('_id');
-  let count = 0;
+export async function generateForAllActiveUsers(): Promise<{
+  generated: number;
+  emailed: number;
+}> {
+  const users = await User.find({
+    calorieGoals: { $ne: null },
+    profile: { $ne: null },
+  }).select('_id name email');
+  let generated = 0;
+  let emailed = 0;
   for (const u of users) {
     try {
-      await generateForUser(u._id.toString(), { force: true });
-      count += 1;
+      const rec = await generateForUser(u._id.toString(), { force: true });
+      generated += 1;
+      try {
+        await sendDinnerEmail({
+          to: u.email,
+          name: u.name,
+          date: rec.date,
+          calorieTarget: rec.calorieTarget,
+          consumedBeforeDinner: rec.consumedBeforeDinner,
+          remainingCalories: rec.remainingCalories,
+          message: rec.message ?? null,
+          suggestions: rec.suggestions.map((s) => ({
+            name: s.name,
+            calories: s.calories,
+            protein: s.protein,
+            carbs: s.carbs,
+            fats: s.fats,
+            rationale: s.rationale ?? undefined,
+          })),
+        });
+        emailed += 1;
+      } catch (err) {
+        console.error('[dinner-cron] email failed for', u.email, err);
+      }
     } catch (err) {
-      console.error('[dinner-cron] failed for user', u._id.toString(), err);
+      console.error('[dinner-cron] generate failed for user', u._id.toString(), err);
     }
   }
-  return { generated: count };
+  return { generated, emailed };
 }

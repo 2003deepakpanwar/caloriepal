@@ -29,4 +29,8 @@ export const env = {
     (process.env.ENABLE_IN_PROCESS_CRON ?? 'true').toLowerCase() === 'true',
   dinnerCronSchedule: process.env.DINNER_CRON_SCHEDULE ?? '0 18 * * *',
   dinnerCronTimezone: process.env.DINNER_CRON_TIMEZONE ?? 'Asia/Kolkata',
+
+  // Email (Resend). onboarding@resend.dev works out of the box on the free tier.
+  resendApiKey: process.env.RESEND_API_KEY ?? '',
+  resendFrom: process.env.RESEND_FROM ?? 'CaloriePal <onboarding@resend.dev>',
 };
