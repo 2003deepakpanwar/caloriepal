@@ -7,7 +7,6 @@ AI-powered food recognition, calorie tracking and a 6 PM dinner planner.
 - `backend/` — Node.js + Express + Mongoose (TypeScript)
 - `frontend/` — Next.js 15 (App Router) + Tailwind v4
 - `render.yaml` — Render blueprint for the backend
-- `vercel.json` — Vercel config pointing at `frontend/`
 - `.github/workflows/ci.yml` — typecheck + build on every PR
 
 ## Prerequisites
@@ -77,7 +76,7 @@ gh repo create caloriepal --public --source=. --remote=origin --push
 ### 4. Frontend on Vercel
 
 1. Sign in at https://vercel.com with GitHub
-2. Import the repo. `vercel.json` already sets Next.js + `frontend/` root.
+2. Import the repo → **set Root Directory to `frontend`** (Vercel auto-detects Next.js)
 3. Add env var `NEXT_PUBLIC_API_URL=https://<your-render-url>`
 4. Deploy. Note the Vercel URL and set it as `FRONTEND_URL` back on Render so CORS works.
 
