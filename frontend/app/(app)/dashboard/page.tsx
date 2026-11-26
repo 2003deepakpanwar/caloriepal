@@ -9,6 +9,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [logs, setLogs] = useState<FoodLog[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -29,12 +30,27 @@ export default function DashboardPage() {
   }, [load]);
 
   async function deleteLog(id: string) {
+    if (deletingId) return; // already deleting something — ignore
     if (!confirm('Delete this food entry?')) return;
+    setDeletingId(id);
+    // Optimistic: drop the row immediately so the UI feels snappy even on cold starts.
+    const before = logs;
+    setLogs((prev) => (prev ? prev.filter((l) => l._id !== id) : prev));
     try {
       await api.del(`/api/food/${id}`);
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Delete failed');
+      // Roll back the optimistic removal only if it was a real error (not "already deleted").
+      const message = err instanceof Error ? err.message : 'Delete failed';
+      if (!/not found/i.test(message)) {
+        setLogs(before);
+        alert(message);
+      } else {
+        // Already gone server-side — just refresh totals.
+        await load();
+      }
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -106,9 +122,10 @@ export default function DashboardPage() {
                   </span>
                   <button
                     onClick={() => deleteLog(log._id)}
-                    className="text-xs text-red-600 hover:underline"
+                    disabled={deletingId === log._id}
+                    className="text-xs text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Delete
+                    {deletingId === log._id ? 'Deleting…' : 'Delete'}
                   </button>
                 </div>
               </li>
