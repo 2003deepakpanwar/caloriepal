@@ -12,7 +12,7 @@ import {
 } from '../services/foodService.js';
 import { isIsoDate, todayInTimezone } from '../utils/dates.js';
 import { HttpError } from '../middleware/errorMiddleware.js';
-import { analyzeFoodImage } from '../services/aiService.js';
+import { analyzeFoodImage, lookupFoodCalories } from '../services/aiService.js';
 import { consumeAiRequest, getUsage } from '../services/aiUsageService.js';
 
 const foodItemSchema = z.object({
@@ -150,6 +150,22 @@ export async function getAiUsage(
     const date = await resolveDate(userId);
     const usage = await getUsage(userId, date);
     res.json({ date, ...usage });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function lookupCalories(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (q.length < 2) throw new HttpError(400, 'Query must be at least 2 characters');
+    if (q.length > 100) throw new HttpError(400, 'Query too long');
+    const result = await lookupFoodCalories(q);
+    res.json(result);
   } catch (err) {
     next(err);
   }

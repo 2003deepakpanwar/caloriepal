@@ -96,6 +96,16 @@ export interface AnalyzeResponse {
   aiUsage: AiUsage;
 }
 
+export interface LookupResult {
+  foodName: string;
+  quantity: number;
+  unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+}
+
 export interface DinnerSuggestion {
   id: string;
   name: string;

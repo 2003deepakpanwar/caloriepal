@@ -8,6 +8,7 @@ import type {
   AiUsage,
   AnalyzeResponse,
   FoodItem,
+  LookupResult,
   MealType,
 } from '../../../lib/types';
 
@@ -31,6 +32,7 @@ export default function FoodTrackerPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [lookingUp, setLookingUp] = useState<number | null>(null);
   const [source, setSource] = useState<'MANUAL' | 'AI'>('MANUAL');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -77,6 +79,34 @@ export default function FoodTrackerPage() {
 
   function addItem() {
     setItems((prev) => [...prev, blankItem()]);
+  }
+
+  async function onLookup(i: number) {
+    const name = items[i]?.foodName?.trim();
+    if (!name || name.length < 2) {
+      setError('Enter a food name first');
+      return;
+    }
+    setError(null);
+    setLookingUp(i);
+    try {
+      const r = await api.get<LookupResult>(
+        `/api/food/lookup?q=${encodeURIComponent(name)}`,
+      );
+      updateItem(i, {
+        foodName: r.foodName,
+        quantity: r.quantity,
+        unit: r.unit,
+        calories: r.calories,
+        protein: r.protein,
+        carbs: r.carbs,
+        fats: r.fats,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Lookup failed');
+    } finally {
+      setLookingUp(null);
+    }
   }
 
   async function onSave(e: React.FormEvent) {
@@ -176,12 +206,23 @@ export default function FoodTrackerPage() {
               <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-6">
                 <label className="col-span-2 block text-xs">
                   <span className="text-neutral-500">Name</span>
-                  <input
-                    className="input mt-1"
-                    value={it.foodName}
-                    onChange={(e) => updateItem(i, { foodName: e.target.value })}
-                    required
-                  />
+                  <div className="mt-1 flex gap-1">
+                    <input
+                      className="input flex-1"
+                      value={it.foodName}
+                      onChange={(e) => updateItem(i, { foodName: e.target.value })}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onLookup(i)}
+                      disabled={lookingUp === i || !it.foodName.trim()}
+                      className="btn-ghost shrink-0 px-2"
+                      title="Auto-fill calories & macros for this food"
+                    >
+                      {lookingUp === i ? '…' : 'Auto'}
+                    </button>
+                  </div>
                 </label>
                 <label className="block text-xs">
                   <span className="text-neutral-500">Qty</span>

@@ -40,6 +40,34 @@ const aiResponseSchema = z.object({
 
 export type AiFoodItem = z.infer<typeof aiItemSchema>;
 
+const LOOKUP_PROMPT = (name: string) => `Estimate calories and macros for one standard serving of this food:
+
+Food name: "${name}"
+
+Return JSON with:
+- foodName: canonical name
+- quantity: typical serving size as a number
+- unit: one of "pieces", "grams", "ml", "bowls", "cups", "slices", "serving"
+- calories: kcal for that serving
+- protein, carbs, fats: grams for that serving
+
+For Indian home-cooked foods (roti, dal, idli, poha, paneer, etc.) use standard homemade portions
+(e.g. 1 chapati ~ 100 kcal, 1 bowl dal ~ 150 kcal, 2 idlis ~ 80 kcal).
+
+Return valid JSON only, no commentary.`;
+
+const lookupSchema = z.object({
+  foodName: z.string().min(1),
+  quantity: z.number().positive(),
+  unit: z.string().min(1),
+  calories: z.number().min(0),
+  protein: z.number().min(0),
+  carbs: z.number().min(0),
+  fats: z.number().min(0),
+});
+
+export type LookupResult = z.infer<typeof lookupSchema>;
+
 export function isAiEnabled(): boolean {
   return env.geminiApiKey.length > 0;
 }
@@ -134,4 +162,69 @@ export async function analyzeFoodImage(
     throw new HttpError(502, 'AI vision response did not match expected schema');
   }
   return result.data.items;
+}
+
+export async function lookupFoodCalories(name: string): Promise<LookupResult> {
+  if (!isAiEnabled()) {
+    throw new HttpError(503, 'AI vision is not configured (GEMINI_API_KEY missing)');
+  }
+
+  const client = new GoogleGenAI({
+    apiKey: env.geminiApiKey,
+    httpOptions: { apiVersion: 'v1beta' },
+  });
+
+  const request = {
+    model: env.geminiModel,
+    contents: [{ role: 'user', parts: [{ text: LOOKUP_PROMPT(name) }] }],
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          foodName: { type: Type.STRING },
+          quantity: { type: Type.NUMBER },
+          unit: { type: Type.STRING },
+          calories: { type: Type.NUMBER },
+          protein: { type: Type.NUMBER },
+          carbs: { type: Type.NUMBER },
+          fats: { type: Type.NUMBER },
+        },
+        required: ['foodName', 'quantity', 'unit', 'calories', 'protein', 'carbs', 'fats'],
+      },
+    },
+  };
+
+  const response = await (async () => {
+    const delays = [0, 600, 1500];
+    let lastErr: unknown;
+    for (const delay of delays) {
+      if (delay) await new Promise((r) => setTimeout(r, delay));
+      try {
+        return await client.models.generateContent(request);
+      } catch (err) {
+        lastErr = err;
+        const status = (err as { status?: number }).status;
+        if (status !== 503 && status !== 429) throw err;
+      }
+    }
+    const status = (lastErr as { status?: number }).status ?? 502;
+    throw new HttpError(
+      status === 503 ? 503 : 429,
+      'Calorie lookup is temporarily unavailable. Please try again in a moment.',
+    );
+  })();
+
+  const text = response.text;
+  if (!text) throw new HttpError(502, 'Empty response from AI');
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new HttpError(502, 'AI returned invalid JSON');
+  }
+  const result = lookupSchema.safeParse(parsed);
+  if (!result.success) throw new HttpError(502, 'AI response did not match expected schema');
+  return result.data;
 }

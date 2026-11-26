@@ -6,6 +6,7 @@ import {
   deleteLogHandler,
   analyzeImage,
   getAiUsage,
+  lookupCalories,
 } from '../controllers/foodController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { uploadImage } from '../middleware/uploadMiddleware.js';
@@ -16,6 +17,7 @@ foodRouter.use(requireAuth);
 foodRouter.post('/manual', createManual);
 foodRouter.get('/daily', listDaily);
 foodRouter.get('/ai-usage', getAiUsage);
+foodRouter.get('/lookup', lookupCalories);
 foodRouter.post('/analyze', uploadImage.single('image'), analyzeImage);
 foodRouter.put('/:id', updateLog);
 foodRouter.delete('/:id', deleteLogHandler);
