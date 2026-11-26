@@ -12,6 +12,8 @@ import {
 } from '../services/foodService.js';
 import { isIsoDate, todayInTimezone } from '../utils/dates.js';
 import { HttpError } from '../middleware/errorMiddleware.js';
+import { analyzeFoodImage } from '../services/aiService.js';
+import { consumeAiRequest, getUsage } from '../services/aiUsageService.js';
 
 const foodItemSchema = z.object({
   foodName: z.string().min(1).max(120),
@@ -106,6 +108,48 @@ export async function deleteLogHandler(
     await deleteFoodLog(userId, id);
     const breakdown = await getDailyBreakdown(userId, date);
     res.json({ deleted: true, daily: breakdown });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function analyzeImage(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    if (!req.file) throw new HttpError(400, 'No image uploaded (field name: "image")');
+    const userId = req.userId as string;
+    const date = await resolveDate(userId);
+
+    // Count the request first so a slow AI call can't be double-spent.
+    const usage = await consumeAiRequest(userId, date);
+
+    const items = await analyzeFoodImage(req.file.buffer, req.file.mimetype);
+
+    res.json({
+      items,
+      aiUsage: usage,
+      // not saved — the client should let the user edit and then POST /api/food/manual
+      // with source="AI" to confirm.
+      note: 'Review items with the user before saving via POST /api/food/manual',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getAiUsage(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const userId = req.userId as string;
+    const date = await resolveDate(userId);
+    const usage = await getUsage(userId, date);
+    res.json({ date, ...usage });
   } catch (err) {
     next(err);
   }
