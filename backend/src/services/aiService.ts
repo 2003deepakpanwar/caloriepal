@@ -52,7 +52,10 @@ export async function analyzeFoodImage(
     throw new HttpError(503, 'AI vision is not configured (GEMINI_API_KEY missing)');
   }
 
-  const client = new GoogleGenAI({ apiKey: env.geminiApiKey });
+  const client = new GoogleGenAI({
+    apiKey: env.geminiApiKey,
+    httpOptions: { apiVersion: 'v1beta' },
+  });
 
   const response = await client.models.generateContent({
     model: env.geminiModel,
