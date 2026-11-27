@@ -146,65 +146,93 @@ export default function FoodTrackerPage() {
     }
   }
 
+  const totalCal = items.reduce((s, i) => s + (Number(i.calories) || 0), 0);
+  const limitReached = usage ? usage.remaining <= 0 : false;
+
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Log food</h1>
-        <p className="text-sm text-neutral-500">Snap a photo for AI detection, or enter items by hand.</p>
+        <p className="mt-0.5 text-sm text-neutral-500">
+          Snap a photo for AI detection, or enter items by hand.
+        </p>
       </header>
 
       <section className="card">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium">AI photo detection</div>
-            <div className="text-xs text-neutral-500">
-              {usage ? `${usage.used} / ${usage.limit} used today · ${usage.remaining} left` : ''}
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="M3 7h3l2-2h8l2 2h3v12H3z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              </div>
+              <div>
+                <div className="text-sm font-semibold">AI photo detection</div>
+                <div className="text-xs text-neutral-500">
+                  {usage
+                    ? `${usage.used} of ${usage.limit} used today · ${usage.remaining} left`
+                    : '—'}
+                </div>
+              </div>
             </div>
           </div>
-          <label className="btn-ghost cursor-pointer">
+          <label className={`btn-primary cursor-pointer ${limitReached ? 'opacity-50' : ''}`}>
             <input
               ref={fileRef}
               type="file"
               accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
               className="hidden"
               onChange={onAnalyze}
-              disabled={analyzing || (usage ? usage.remaining <= 0 : false)}
+              disabled={analyzing || limitReached}
             />
-            {analyzing ? 'Analyzing…' : '📷 Upload photo'}
+            {analyzing ? 'Analyzing…' : 'Upload photo'}
           </label>
         </div>
       </section>
 
-      <form onSubmit={onSave} className="card space-y-4">
-        <label className="block text-sm">
-          <span className="font-medium text-neutral-700">Meal</span>
-          <select
-            className="input mt-1"
-            value={mealType}
-            onChange={(e) => setMealType(e.target.value as MealType)}
-          >
-            {MEAL_TYPES.map((m) => (
-              <option key={m} value={m}>
-                {m[0].toUpperCase() + m.slice(1)}
-              </option>
-            ))}
-          </select>
-        </label>
+      <form onSubmit={onSave} className="card space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <label className="block text-sm">
+            <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">Meal</span>
+            <select
+              className="input mt-1 min-w-[180px]"
+              value={mealType}
+              onChange={(e) => setMealType(e.target.value as MealType)}
+            >
+              {MEAL_TYPES.map((m) => (
+                <option key={m} value={m}>
+                  {m[0].toUpperCase() + m.slice(1)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="text-right">
+            <div className="text-xs font-medium uppercase tracking-wide text-neutral-400">Total</div>
+            <div className="mt-1 text-xl font-semibold tabular-nums text-neutral-900">
+              {totalCal}
+              <span className="ml-1 text-xs font-normal text-neutral-500">kcal</span>
+            </div>
+          </div>
+        </div>
 
         <div className="space-y-3">
           {items.map((it, i) => (
-            <div key={i} className="rounded-lg border border-neutral-200 p-3">
+            <div key={i} className="rounded-xl border border-neutral-200/80 bg-neutral-50/50 p-4">
               <div className="flex items-center justify-between">
-                <div className="text-xs font-medium text-neutral-500">
+                <div className="flex items-center gap-2 text-xs font-medium text-neutral-500">
                   Item {i + 1}
-                  {typeof it.confidence === 'number' && (
-                    <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">
-                      AI · {Math.round(it.confidence * 100)}%
-                    </span>
+                  {typeof it.confidence === 'number' && it.confidence < 1 && (
+                    <span className="chip-good">AI · {Math.round(it.confidence * 100)}%</span>
                   )}
                 </div>
                 {items.length > 1 && (
-                  <button type="button" onClick={() => removeItem(i)} className="text-xs text-red-600 hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => removeItem(i)}
+                    className="text-xs text-neutral-400 transition hover:text-red-600"
+                  >
                     Remove
                   </button>
                 )}
@@ -278,12 +306,11 @@ export default function FoodTrackerPage() {
           + Add another item
         </button>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        )}
 
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-neutral-500">
-            Total: <span className="font-medium text-neutral-900">{items.reduce((s, i) => s + (Number(i.calories) || 0), 0)} kcal</span>
-          </div>
+        <div className="flex items-center justify-end">
           <button type="submit" disabled={submitting} className="btn-primary">
             {submitting ? 'Saving…' : 'Save to log'}
           </button>

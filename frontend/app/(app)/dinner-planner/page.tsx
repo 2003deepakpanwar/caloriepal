@@ -91,28 +91,26 @@ export default function DinnerPlannerPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Dinner planner</h1>
-        <p className="text-sm text-neutral-500">
+        <p className="mt-0.5 text-sm text-neutral-500">
           Suggestions based on what you have left after today's meals.
         </p>
       </header>
 
-      <section className="card space-y-4">
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <label className="inline-flex items-center gap-2">
-            <input type="checkbox" checked={vegOnly} onChange={(e) => setVegOnly(e.target.checked)} />
-            Vegetarian only
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={highProteinOnly}
-              onChange={(e) => setHighProteinOnly(e.target.checked)}
-            />
-            High-protein only
-          </label>
+      <section className="card space-y-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterPill
+            active={vegOnly}
+            onChange={() => setVegOnly(!vegOnly)}
+            label="Vegetarian"
+          />
+          <FilterPill
+            active={highProteinOnly}
+            onChange={() => setHighProteinOnly(!highProteinOnly)}
+            label="High-protein"
+          />
           <div className="ml-auto flex gap-2">
             <button onClick={openCustom} className="btn-ghost">
               Custom…
@@ -280,15 +278,51 @@ export default function DinnerPlannerPage() {
 
 function Mini({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'bad' }) {
   return (
-    <div className="rounded-lg bg-neutral-50 px-3 py-2">
-      <div className="text-xs text-neutral-500">{label}</div>
+    <div className="rounded-xl border border-neutral-200/80 bg-white p-3">
+      <div className="text-xs font-medium uppercase tracking-wide text-neutral-400">{label}</div>
       <div
-        className={`font-semibold ${
-          tone === 'bad' ? 'text-red-600' : tone === 'good' ? 'text-emerald-700' : ''
+        className={`mt-1 text-lg font-semibold tabular-nums ${
+          tone === 'bad' ? 'text-red-600' : tone === 'good' ? 'text-emerald-700' : 'text-neutral-900'
         }`}
       >
         {value}
       </div>
     </div>
+  );
+}
+
+function FilterPill({
+  label,
+  active,
+  onChange,
+}: {
+  label: string;
+  active: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+        active
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50'
+      }`}
+      aria-pressed={active}
+    >
+      <span
+        className={`flex h-3.5 w-3.5 items-center justify-center rounded-full border ${
+          active ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-neutral-300'
+        }`}
+      >
+        {active && (
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2} className="h-2.5 w-2.5">
+            <path d="M2.5 6.5l2.5 2.5 4.5-5" />
+          </svg>
+        )}
+      </span>
+      {label}
+    </button>
   );
 }

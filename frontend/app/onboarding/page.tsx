@@ -87,7 +87,7 @@ export default function OnboardingPage() {
       <p className="mt-1 text-sm text-neutral-500">
         We use these to compute your daily calorie target.
       </p>
-      <form onSubmit={onSubmit} className="mt-8 space-y-6 rounded-xl bg-white p-6 shadow-sm ring-1 ring-neutral-200">
+      <form onSubmit={onSubmit} className="mt-8 space-y-6 card">
         <div className="grid grid-cols-2 gap-4">
           <NumberField label="Age" value={age} onChange={setAge} min={10} max={100} />
           <Select
@@ -127,19 +127,30 @@ export default function OnboardingPage() {
           onChange={(v) => setActivityLevel(v as ActivityLevel)}
           options={activityOptions}
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex items-center justify-between">
-          {preview && (
-            <div className="text-sm">
+        {error && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        )}
+        <div className="flex flex-col gap-4 border-t border-neutral-200/80 pt-4 md:flex-row md:items-center md:justify-between">
+          {preview ? (
+            <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
-                BMR: <span className="font-medium">{preview.bmr}</span> · TDEE:{' '}
-                <span className="font-medium">{preview.tdee}</span>
+                <div className="text-xs font-medium uppercase tracking-wide text-neutral-400">BMR</div>
+                <div className="mt-0.5 font-semibold tabular-nums">{preview.bmr}</div>
               </div>
               <div>
-                Daily target:{' '}
-                <span className="font-semibold text-emerald-600">{preview.dailyTarget}</span> kcal
+                <div className="text-xs font-medium uppercase tracking-wide text-neutral-400">TDEE</div>
+                <div className="mt-0.5 font-semibold tabular-nums">{preview.tdee}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-neutral-400">Daily target</div>
+                <div className="mt-0.5 font-semibold tabular-nums text-emerald-700">
+                  {preview.dailyTarget}
+                  <span className="ml-1 text-xs font-normal text-neutral-500">kcal</span>
+                </div>
               </div>
             </div>
+          ) : (
+            <p className="text-xs text-neutral-500">Save to see your calorie target.</p>
           )}
           <button type="submit" disabled={submitting} className="btn-primary">
             {submitting ? 'Saving…' : 'Save and continue'}
